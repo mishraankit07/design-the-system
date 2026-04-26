@@ -19,6 +19,8 @@ bin/
 /nbdist/
 /.nb-gradle/
 
+/.idea
+
 .vscode/
 
 .DS_Store
@@ -29,3 +31,8 @@ bin/
 
 *.iml
 *.xml
+*.class
+*.bin
+*.lock
+*.properties
+*.keystream
