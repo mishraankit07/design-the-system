@@ -1,5 +1,6 @@
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.io.PrintWriter
 import java.net.ServerSocket
 
@@ -16,9 +17,9 @@ fun main() {
         println("Client connected: ${clientSocket.inetAddress}")
 
         val reader = BufferedReader(
-            InputStreamReader(clientSocket.getInputStream())
+            InputStreamReader(clientSocket.getInputStream(), Charsets.UTF_8)
         )
-        val writer = PrintWriter(clientSocket.getOutputStream(), true)
+        val writer = PrintWriter(OutputStreamWriter(clientSocket.getOutputStream(), Charsets.UTF_8), true)
 
         var line: String?
 

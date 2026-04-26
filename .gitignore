@@ -27,12 +27,9 @@ bin/
 
 /build
 /out
-.*.idea
 
-*.iml
-*.xml
-*.class
-*.bin
-*.lock
-*.properties
-*.keystream
+# Ignore generated .properties files
+**/build/**/*.properties
+
+# Ignore generated .xml files
+**/build/**/*.xml
