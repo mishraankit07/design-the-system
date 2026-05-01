@@ -17,7 +17,7 @@ interface DataType {
     object NullType : DataType
 }
 
-class Result(val result: DataType, val position: Int, val error: Exception? = null)
+class Result(val result: DataType, val error: Exception? = null)
 
 
 object RespSerializer {
@@ -43,29 +43,42 @@ object RespSerializer {
     **/
     // output: ["GET", "key"]
     private fun readArray(input: InputStream): Result {
-        val firstChar = input.read().toChar()
-        val numberOfElements = readInteger(input)
+        var numberOfElements = 0
+
+        while(true){
+            val element = input.read()
+            if(element == -1) throw RuntimeException("Unexpected end of stream")
+            val value = element.toChar()
+            if(value == '\r') {
+                val next = input.read()
+                if(next != '\n'.code) {
+                    throw RuntimeException("Expected LF after CR, but got: ${next.toChar()}")
+                }
+
+                break
+            }
+
+            numberOfElements = numberOfElements * 10 + (value - '0')
+        }
+
 
         val elements = mutableListOf<DataType>()
-        var position = numberOfElements.position
-        for (i in 0..<(numberOfElements.result as DataType.IntegerType).value) {
+        repeat(numberOfElements) {
             val elementResult = deserialize(input)
 
             if (elementResult.error != null) {
-                return Result(result = DataType.ErrorType(elementResult.error.message ?: "Unknown error"), position = position, error = elementResult.error)
+                return Result(result = DataType.ErrorType(elementResult.error.message ?: "Unknown error"), error = elementResult.error)
             } else {
                 elements.add(elementResult.result)
-                position += elementResult.position
             }
         }
 
-        return Result(result = DataType.ArrayType(elements), position = position)
+        return Result(result = DataType.ArrayType(elements))
     }
 
     // example: +OK\r\n -> expected output: OK
     // first char is already read in deserialize function, so we start from O
     private fun readSimpleString(input: InputStream): Result {
-        var position = 0
         val result = StringBuilder()
 
         while(true) {
@@ -80,75 +93,77 @@ object RespSerializer {
                     throw RuntimeException("Expected LF after CR, but got: ${next.toChar()}")
                 }
 
-                position++
                 break
             }
 
             result.append(value)
-            position++
         }
 
-        return Result(result = DataType.StringType(result.toString()), position = position + 2)
+        return Result(result = DataType.StringType(result.toString()))
     }
 
     // example: :100\r\n -> expected output: 100
     private fun readInteger(input: InputStream): Result {
-        var position = 0
         var result: Int = 0
 
         while(true) {
-            val char = input.read()
-            if(char == -1) throw RuntimeException("Unexpected end of stream")
-            val value = char.toChar()
+            val inputByte = input.read()
+            if(inputByte == -1) throw RuntimeException("Unexpected end of stream")
+            val value = inputByte.toChar()
             if(value == '\r') {
                 val next = input.read()
                 if(next != '\n'.code) {
                     throw RuntimeException("Expected LF after CR, but got: ${next.toChar()}")
                 }
 
-                position++
                 break
             }
-            result = result * 10 + (input.read().toChar() - '0')
-            position++
+
+            result = result * 10 + (value - '0')
         }
 
-        return Result(result = DataType.IntegerType(result), position = position + 2)
+        return Result(result = DataType.IntegerType(result))
     }
 
     // example: $6\r\nfoobar\r\n -> expected output: foobar
     private fun readBulkString(input: InputStream): Result {
-        var position = 0
         val lengthObject = readInteger(input)
         val length = (lengthObject.result as DataType.IntegerType).value
-        position = lengthObject.position
 
         if (length == -1) {
-            return Result(result = DataType.BulkStringType(null), position = position)
+            return Result(result = DataType.BulkStringType(null))
         }
 
-        position += 2 // skip \r\n
         val result = StringBuilder()
 
         while(result.length < length) {
-            result.append(input.read().toChar())
-            position++
+            val b = input.read()
+            if (b == -1) throw RuntimeException("Unexpected end of stream")
+            result.append(b.toChar())
         }
 
-        return Result(result = DataType.BulkStringType(result.toString()), position = position + 2)
+        val cr = input.read()
+        val lf = input.read()
+        if (cr != '\r'.code || lf != '\n'.code) {
+            throw RuntimeException("Expected CRLF after bulk string payload")
+        }
+        return Result(result = DataType.BulkStringType(result.toString()))
     }
 
     // example: $-1\r\n -> expected output: null
     private fun readError(input: InputStream): Result {
-        val firstChar = input.read().toChar()
-        var position = 1
-        val result = StringBuilder()
+        while(true) {
+            val char = input.read().toChar()
+            if(char == '\r') {
+                val next = input.read()
+                if(next != '\n'.code) {
+                    throw RuntimeException("Expected LF after CR, but got: ${next.toChar()}")
+                }
 
-        while(input.read().toChar() != '\r') {
-            result.append(input.read().toChar())
-            position++
+                break
+            }
         }
 
-        return Result(result = DataType.ErrorType(result.toString()), position = position + 2)
+        return Result(result = DataType.NullType)
     }
 }
